@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Synchronic - Custom Interval Timer</title>
+  
+  <!-- Modern Typography from Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
+  <style>
+    /* -------------------------------------------------------------
+       1. DESIGN SYSTEM & CSS VARIABLES
+       ------------------------------------------------------------- */
+    :root {
+      --bg-gradient: linear-gradient(135deg, #0f0c1b 0%, #15102a 50%, #06040a 100%);
+      --card-bg: rgba(255, 255, 255, 0.03);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-blur: blur(16px);
+      
+      --color-primary: #8b5cf6; /* Violet */
+      --color-primary-glow: rgba(139, 92, 246, 0.4);
+      --color-work: #ec4899; /* Pink for Duolingo/Study */
+      --color-work-glow: rgba(236, 72, 153, 0.3);
+      --color-break: #10b981; /* Emerald for Break */
+      --color-break-glow: rgba(16, 185, 129, 0.3);
+      
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --font-family: 'Outfit', sans-serif;
+      --font-mono: 'Share Tech Mono', monospace;
+      
+      --transition-speed: 0.3s;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      scrollbar-width: thin;
+      scrollbar-color: var(--color-primary) var(--card-bg);
+    }
+
+    body {
+      background: var(--bg-gradient);
+      background-attachment: fixed;
+      color: var(--text-main);
+      font-family: var(--font-family);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+      overflow-x: hidden;
+    }
+
+    /* Custom Scrollbar for Webkit */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--color-primary);
+      border-radius: 3px;
+    }
+
+    /* -------------------------------------------------------------
+       2. LAYOUT & GLASSMORPHISM CONTAINERS
+       ------------------------------------------------------------- */
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+      animation: fadeIn Down 0.8s ease-out;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      letter-spacing: -0.05em;
+      background: linear-gradient(to right, #a78bfa, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .subtitle {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      font-weight: 300;
+    }
+
+    .container {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 2rem;
+      max-width: 1100px;
+      width: 100%;
+      align-items: start;
+      animation: fadeIn 1s ease-out;
+    }
+
+    @media (max-width: 900px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      backdrop-filter: var(--card-blur);
+      -webkit-backdrop-filter: var(--card-blur);
+      padding: 2rem;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+      transition: border-color var(--transition-speed), box-shadow var(--transition-speed);
+    }
+
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    /* -------------------------------------------------------------
+       3. TIMER DISPLAY (CIRCULAR PROGRESS & DIGITAL CLOCK)
+       ------------------------------------------------------------- */
+    .timer-display-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .timer-circle-container {
+      position: relative;
+      width: 300px;
+      height: 300px;
+      margin: 1.5rem 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .progress-svg {
+      transform: rotate(-90deg);
+      width: 100%;
+      height: 100%;
+    }
+
+    .progress-bg {
+      fill: none;
+      stroke: rgba(255, 255, 255, 0.02);
+      stroke-width: 8;
+    }
+
+    .progress-bar {
+      fill: none;
+      stroke: var(--color-primary);
+      stroke-width: 8;
+      stroke-linecap: round;
+      stroke-dasharray: 879.64; /* 2 * PI * r (r=140) */
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset 0.2s linear, stroke var(--transition-speed);
+      filter: drop-shadow(0 0 10px var(--color-primary-glow));
+    }
+
+    .timer-digital {
+      position: absolute;
+      font-family: var(--font-mono);
+      font-size: 3.8rem;
+      font-weight: 400;
+      letter-spacing: 2px;
+      text-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
+      z-index: 2;
+    }
+
+    .session-info {
+      text-align: center;
+      margin-bottom: 1rem;
+      z-index: 2;
+    }
+
+    .session-badge {
+      display: inline-block;
+      padding: 0.35rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      transition: background var(--transition-speed);
+    }
+
+    .badge-work {
+      background: var(--color-work);
+      color: #fff;
+      filter: drop-shadow(0 0 8px var(--color-work-glow));
+    }
+
+    .badge-break {
+      background: var(--color-break);
+      color: #000;
+      filter: drop-shadow(0 0 8px var(--color-break-glow));
+    }
+
+    .session-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-top: 0.25rem;
+      color: #fff;
+    }
+
+    /* -------------------------------------------------------------
+       4. CONTROLS (BUTTONS)
+       ------------------------------------------------------------- */
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      width: 100%;
+      margin-top: 1.5rem;
+    }
+
+    .btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      color: var(--text-main);
+      padding: 1rem;
+      font-family: var(--font-family);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary {
+      background: var(--color-primary);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 4px 14px 0 var(--color-primary-glow);
+    }
+
+    .btn-primary:hover {
+      background: #9b70ff;
+      box-shadow: 0 6px 20px 0 var(--color-primary-glow);
+      border-color: transparent;
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #f87171;
+    }
+
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.3);
+      border-color: rgba(239, 68, 68, 0.5);
+    }
+
+    /* -------------------------------------------------------------
+       5. CONFIGURATION PANEL & INPUTS
+       ------------------------------------------------------------- */
+    .section-title-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 0.75rem;
+    }
+
+    .section-title-bar h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .sessions-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      max-height: 320px;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .session-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 0.85rem 1rem;
+      transition: all 0.2s ease;
+    }
+
+    .session-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .session-item.active {
+      border-color: var(--color-primary);
+      background: rgba(139, 92, 246, 0.08);
+      box-shadow: inset 0 0 10px rgba(139, 92, 246, 0.15);
+    }
+
+    .session-item-details {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .session-item-name {
+      font-weight: 500;
+      font-size: 0.95rem;
+    }
+
+    .session-item-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .type-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .type-dot-work { background: var(--color-work); }
+    .type-dot-break { background: var(--color-break); }
+
+    .btn-icon {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 0.25rem;
+      border-radius: 6px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-icon:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+    }
+
+    .btn-icon-delete:hover {
+      color: #ef4444;
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    .btn-icon-edit:hover {
+      color: var(--color-primary);
+      background: rgba(139, 92, 246, 0.1);
+    }
+
+    /* Form Styles */
+    .add-form {
+      display: grid;
+      gap: 1rem;
+      background: rgba(0, 0, 0, 0.15);
+      padding: 1.25rem;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    label {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    input, select {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      color: #fff;
+      padding: 0.65rem 0.85rem;
+      font-family: var(--font-family);
+      font-size: 0.95rem;
+      transition: all 0.2s;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 2px var(--color-primary-glow);
+    }
+
+    .time-inputs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .input-addon {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .input-addon input {
+      width: 100%;
+      padding-right: 2rem;
+    }
+
+    .input-addon::after {
+      content: attr(data-unit);
+      position: absolute;
+      right: 0.75rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    /* Sound Settings UI */
+    .sound-settings-card {
+      grid-column: span 2;
+      display: grid;
+      grid-template-columns: 1.2fr 1.5fr 1.5fr 1fr;
+      gap: 1.5rem;
+      align-items: center;
+    }
+
+    @media (max-width: 900px) {
+      .sound-settings-card {
+        grid-column: span 1;
+        grid-template-columns: 1fr;
+        gap: 1.25rem;
+      }
+    }
+
+    .volume-slider {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .volume-slider input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.1);
+      outline: none;
+      padding: 0;
+      border: none;
+    }
+
+    .volume-slider input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--color-primary);
+      cursor: pointer;
+      box-shadow: 0 0 8px var(--color-primary-glow);
+      transition: transform 0.1s;
+    }
+
+    .volume-slider input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.25);
+    }
+
+    /* Sync Indicator */
+    .sync-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 1.5rem;
+    }
+
+    .sync-dot {
+      width: 8px;
+      height: 8px;
+      background: #10b981;
+      border-radius: 50%;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+      animation: pulse 2s infinite;
+    }
+
+    /* -------------------------------------------------------------
+       6. KEYFRAMES & ANIMATIONS
+       ------------------------------------------------------------- */
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.3); opacity: 0.6; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* Modal / Toast Notification */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: rgba(21, 16, 42, 0.95);
+      border: 1px solid var(--color-primary);
+      padding: 1rem 2rem;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(10px);
+      z-index: 999;
+      transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </svg>
+      Synchronic
+    </h1>
+    <div class="subtitle">Custom Interval & Session Timer</div>
+  </header>
+
+  <div class="container">
+    
+    <!-- LEFT PANEL: TIMER DISPLAY -->
+    <div class="card timer-display-card">
+      <div class="session-info">
+        <span id="active-badge" class="session-badge badge-work">Duolingo</span>
+        <div id="active-title" class="session-title">Belajar Duolingo</div>
+      </div>
+      
+      <div class="timer-circle-container">
+        <svg class="progress-svg" viewBox="0 0 300 300">
+          <circle class="progress-bg" cx="150" cy="150" r="140" />
+          <circle id="progress-bar" class="progress-bar" cx="150" cy="150" r="140" />
+        </svg>
+        <div id="timer-text" class="timer-digital">01:30</div>
+      </div>
+      
+      <div class="controls">
+        <button id="btn-play-pause" class="btn btn-primary">
+          <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          Mulai
+        </button>
+        <button id="btn-skip" class="btn">
+          <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+          Skip Sesi
+        </button>
+        <button id="btn-reset" class="btn btn-danger">Reset Sesi</button>
+        <button id="btn-reset-all" class="btn">Reset Semua</button>
+      </div>
+    </div>
+    
+    <!-- RIGHT PANEL: CONFIGURATOR -->
+    <div class="card">
+      <div class="section-title-bar">
+        <h2>Urutan Sesi Timer</h2>
+      </div>
+      
+      <div id="sessions-list" class="sessions-list">
+        <!-- Rendered dynamically by JS -->
+      </div>
+      
+      <div class="section-title-bar" style="margin-top: 1.5rem; margin-bottom: 1rem;">
+        <h2 id="form-title">Tambah Sesi Baru</h2>
+      </div>
+      
+      <form id="add-session-form" class="add-form">
+        <div class="form-group">
+          <label for="session-name">Nama Sesi / Kegiatan</label>
+          <input type="text" id="session-name" placeholder="Misal: Belajar Duolingo" required>
+        </div>
+        
+        <div class="time-inputs">
+          <div class="form-group">
+            <label for="session-minutes">Menit</label>
+            <div class="input-addon" data-unit="m">
+              <input type="number" id="session-minutes" min="0" max="999" value="25" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="session-seconds">Detik</label>
+            <div class="input-addon" data-unit="s">
+              <input type="number" id="session-seconds" min="0" max="59" value="0" required>
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="session-type">Tipe Sesi</label>
+          <select id="session-type">
+            <option value="work">Belajar (Pink)</option>
+            <option value="break">Break / Istirahat (Hijau)</option>
+          </select>
+        </div>
+        
+        <div style="display: flex; gap: 0.75rem;">
+          <button type="submit" id="btn-submit-session" class="btn btn-primary" style="margin-top: 0.5rem; flex: 1;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+            Tambahkan Sesi
+          </button>
+          <button type="button" id="btn-cancel-edit" class="btn" style="margin-top: 0.5rem; display: none;">
+            Batal
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- BOTTOM PANEL: SETTINGS -->
+    <div class="card sound-settings-card">
+      <div class="form-group">
+        <label for="sound-select">Suara Alarm</label>
+        <select id="sound-select">
+          <option value="digital">Digital Beeps</option>
+          <option value="chime">Relaxing Chime</option>
+          <option value="pulse">Sci-Fi Pulse</option>
+          <option value="sine">Simple Sine Wave</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label>Volume Alarm</label>
+        <div class="volume-slider">
+          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+          <input type="range" id="volume-range" min="0" max="1" step="0.05" value="0.8">
+          <span id="volume-text">80%</span>
+        </div>
+      </div>
+
+      <div class="form-group" style="flex-direction: row; align-items: center; gap: 0.5rem; justify-content: flex-start;">
+        <input type="checkbox" id="auto-start-checkbox" checked style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--color-primary);">
+        <label for="auto-start-checkbox" style="cursor: pointer; text-transform: none; font-size: 0.9rem; font-weight: 500;">Mulai Sesi Otomatis</label>
+      </div>
+
+      <div>
+        <button id="btn-test-sound" class="btn" style="width: 100%;">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M9 9H3v6h6" stroke-linecap="round"/></svg>
+          Test Suara
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="sync-status">
+    <div class="sync-dot"></div>
+    <span>Disimpan di penyimpanan browser (Local Storage)</span>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast" class="toast">
+    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span id="toast-message">Konfigurasi berhasil disimpan!</span>
+  </div>
+
+  <!-- -------------------------------------------------------------
+     7. JAVASCRIPT APPLICATION LOGIC
+     ------------------------------------------------------------- -->
+  <script>
+    // --- Web Audio API Synth Engine ---
+    const AudioEngine = {
+      ctx: null,
+
+      init() {
+        if (!this.ctx) {
+          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+      },
+
+      play(type, volume) {
+        this.init();
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+
+        const now = this.ctx.currentTime;
+        const masterGain = this.ctx.createGain();
+        masterGain.gain.setValueAtTime(volume, now);
+        masterGain.connect(this.ctx.destination);
+
+        switch (type) {
+          case 'digital':
+            // Fast double beep
+            this.beep(880, 0.15, now, masterGain);
+            this.beep(880, 0.15, now + 0.25, masterGain);
+            break;
+            
+          case 'chime':
+            // Smooth chord
+            this.beep(523.25, 0.3, now, masterGain, 'sine'); // C5
+            this.beep(659.25, 0.3, now + 0.15, masterGain, 'sine'); // E5
+            this.beep(783.99, 0.4, now + 0.3, masterGain, 'sine'); // G5
+            this.beep(1046.50, 0.6, now + 0.45, masterGain, 'sine'); // C6
+            break;
+
+          case 'pulse':
+            // Sci-fi sweep
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(440, now);
+            osc.frequency.exponentialRampToValueAtTime(880, now + 0.4);
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(volume, now + 0.1);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+            
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.5);
+            break;
+
+          case 'sine':
+          default:
+            // Standard sine wave beep
+            this.beep(600, 0.5, now, masterGain, 'sine');
+            break;
+        }
+      },
+
+      beep(frequency, duration, startTime, destinationNode, type = 'sine') {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        
+        osc.type = type;
+        osc.frequency.setValueAtTime(frequency, startTime);
+        
+        gain.gain.setValueAtTime(0, startTime);
+        gain.gain.linearRampToValueAtTime(1, startTime + 0.05); // Attack
+        gain.gain.setValueAtTime(1, startTime + duration - 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration); // Decay
+        
+        osc.connect(gain);
+        gain.connect(destinationNode);
+        
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+      }
+    };
+
+    // --- State & Config ---
+    let sessions = [
+      { id: '1', name: 'Belajar Duolingo', duration: 90, type: 'work' },
+      { id: '2', name: 'Break Pertama', duration: 60, type: 'break' },
+      { id: '3', name: 'Belajar Lanjutan', duration: 1200, type: 'work' },
+      { id: '4', name: 'Break Kedua', duration: 300, type: 'break' }
+    ];
+
+    let currentSessionIndex = 0;
+    let remainingTime = 0; // dalam detik
+    let isRunning = false;
+    let editingSessionId = null;
+    let timerInterval = null;
+    let targetEndTime = 0; // Timestamp kapan sesi berakhir (mencegah throttling background)
+
+    let soundSettings = {
+      alarmSound: 'digital',
+      volume: 0.8,
+      autoStart: true
+    };
+
+    // --- DOM Elements ---
+    const activeBadge = document.getElementById('active-badge');
+    const activeTitle = document.getElementById('active-title');
+    const timerText = document.getElementById('timer-text');
+    const progressBar = document.getElementById('progress-bar');
+    
+    const btnPlayPause = document.getElementById('btn-play-pause');
+    const btnSkip = document.getElementById('btn-skip');
+    const btnReset = document.getElementById('btn-reset');
+    const btnResetAll = document.getElementById('btn-reset-all');
+    
+    const sessionsListEl = document.getElementById('sessions-list');
+    const addSessionForm = document.getElementById('add-session-form');
+    const soundSelect = document.getElementById('sound-select');
+    const volumeRange = document.getElementById('volume-range');
+    const volumeText = document.getElementById('volume-text');
+    const btnTestSound = document.getElementById('btn-test-sound');
+    const autoStartCheckbox = document.getElementById('auto-start-checkbox');
+    
+    const toast = document.getElementById('toast');
+    const toastMessage = document.getElementById('toast-message');
+
+    // --- Storage Logic ---
+    function loadFromLocalStorage() {
+      const stored = localStorage.getItem('custom_timer_config');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed.sessions && Array.isArray(parsed.sessions)) {
+            sessions = parsed.sessions;
+          }
+          if (parsed.settings) {
+            soundSettings = parsed.settings;
+            soundSelect.value = soundSettings.alarmSound || 'digital';
+            volumeRange.value = soundSettings.volume !== undefined ? soundSettings.volume : 0.8;
+            volumeText.textContent = `${Math.round(volumeRange.value * 100)}%`;
+            autoStartCheckbox.checked = soundSettings.autoStart !== undefined ? soundSettings.autoStart : true;
+          }
+        } catch (e) {
+          console.error("Gagal membaca LocalStorage:", e);
+        }
+      }
+    }
+
+    function saveToLocalStorage() {
+      const config = {
+        sessions: sessions,
+        settings: soundSettings
+      };
+      localStorage.setItem('custom_timer_config', JSON.stringify(config));
+      showToast("Penyimpanan lokal berhasil diperbarui!");
+    }
+
+    // --- Core Timer Logic ---
+    function initTimer() {
+      if (sessions.length === 0) {
+        activeBadge.style.display = 'none';
+        activeTitle.textContent = "Tidak ada sesi";
+        timerText.textContent = "00:00";
+        updateProgressRing(1);
+        return;
+      }
+
+      const currentSession = sessions[currentSessionIndex];
+      remainingTime = currentSession.duration;
+      
+      activeBadge.style.display = 'inline-block';
+      activeBadge.textContent = currentSession.type === 'work' ? 'Belajar' : 'Break';
+      activeBadge.className = `session-badge badge-${currentSession.type}`;
+      activeTitle.textContent = currentSession.name;
+      
+      updateTimerDisplay();
+      updateSessionsListUI();
+    }
+
+    function updateTimerDisplay() {
+      const mins = Math.floor(remainingTime / 60);
+      const secs = remainingTime % 60;
+      timerText.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      
+      if (sessions.length > 0) {
+        const totalDuration = sessions[currentSessionIndex].duration;
+        const progress = totalDuration > 0 ? (remainingTime / totalDuration) : 0;
+        updateProgressRing(progress);
+      }
+    }
+
+    function updateProgressRing(progress) {
+      const radius = 140;
+      const circumference = 2 * Math.PI * radius; // 879.64
+      const offset = circumference * (1 - progress);
+      progressBar.style.strokeDashoffset = offset;
+      
+      // Update color based on session type
+      if (sessions.length > 0) {
+        const currentType = sessions[currentSessionIndex].type;
+        const color = currentType === 'work' ? 'var(--color-work)' : 'var(--color-break)';
+        const glow = currentType === 'work' ? 'var(--color-work-glow)' : 'var(--color-break-glow)';
+        progressBar.style.stroke = color;
+        progressBar.style.filter = `drop-shadow(0 0 10px ${glow})`;
+      }
+    }
+
+    function startTimer() {
+      if (sessions.length === 0) return;
+      
+      // Request AudioContext activation
+      AudioEngine.init();
+
+      isRunning = true;
+      btnPlayPause.innerHTML = `
+        <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        Jeda
+      `;
+      btnPlayPause.classList.remove('btn-primary');
+
+      // Gunakan timestamp system clock untuk menghindarkan drift di background tab
+      targetEndTime = Date.now() + remainingTime * 1000;
+
+      timerInterval = setInterval(() => {
+        const diff = Math.max(0, Math.round((targetEndTime - Date.now()) / 1000));
+        remainingTime = diff;
+        updateTimerDisplay();
+
+        if (remainingTime <= 0) {
+          clearInterval(timerInterval);
+          onSessionFinished();
+        }
+      }, 100); // Poll fast for precise rendering
+    }
+
+    function pauseTimer() {
+      isRunning = false;
+      clearInterval(timerInterval);
+      btnPlayPause.innerHTML = `
+        <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        Mulai
+      `;
+      btnPlayPause.classList.add('btn-primary');
+    }
+
+    function onSessionFinished() {
+      // Play Alarm
+      AudioEngine.play(soundSettings.alarmSound, soundSettings.volume);
+
+      showToast(`Sesi "${sessions[currentSessionIndex].name}" Selesai!`);
+
+      // Go to next session if available
+      if (currentSessionIndex + 1 < sessions.length) {
+        currentSessionIndex++;
+      } else {
+        // Loop back to start
+        currentSessionIndex = 0;
+        showToast("Semua sesi telah selesai! Memulai kembali...");
+      }
+
+      initTimer();
+      
+      // Auto start next session
+      if (soundSettings.autoStart) {
+        isRunning = true;
+        startTimer();
+      } else {
+        pauseTimer();
+      }
+    }
+
+    // --- UI Helpers ---
+    function updateSessionsListUI() {
+      sessionsListEl.innerHTML = '';
+      
+      sessions.forEach((session, index) => {
+        const item = document.createElement('div');
+        item.className = `session-item ${index === currentSessionIndex ? 'active' : ''}`;
+        
+        const mins = Math.floor(session.duration / 60);
+        const secs = session.duration % 60;
+        const durationStr = `${mins}m ${secs}s`;
+
+        item.innerHTML = `
+          <div class="session-item-details">
+            <div class="session-item-name">${session.name}</div>
+            <div class="session-item-meta">
+              <span class="type-dot type-dot-${session.type}"></span>
+              ${session.type === 'work' ? 'Belajar' : 'Break'} • ${durationStr}
+            </div>
+          </div>
+          <div style="display: flex; gap: 0.25rem;">
+            <button class="btn-icon btn-icon-edit" onclick="startEditSession('${session.id}', event)">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="btn-icon btn-icon-delete" onclick="deleteSession('${session.id}', event)">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        `;
+
+        // Click on item to jump directly to it
+        item.addEventListener('click', (e) => {
+          if (e.target.closest('.btn-icon')) return; // ignore delete button clicks
+          jumpToSession(index);
+        });
+
+        sessionsListEl.appendChild(item);
+      });
+    }
+
+    function jumpToSession(index) {
+      const runningState = isRunning;
+      pauseTimer();
+      currentSessionIndex = index;
+      initTimer();
+      if (runningState) {
+        startTimer();
+      }
+    }
+
+    function deleteSession(id, event) {
+      event.stopPropagation();
+      
+      const sessionToDeleteIndex = sessions.findIndex(s => s.id === id);
+      if (sessionToDeleteIndex === -1) return;
+
+      const activeDeleted = sessionToDeleteIndex === currentSessionIndex;
+      pauseTimer();
+
+      sessions.splice(sessionToDeleteIndex, 1);
+      
+      if (sessions.length === 0) {
+        currentSessionIndex = 0;
+      } else if (activeDeleted) {
+        currentSessionIndex = Math.min(currentSessionIndex, sessions.length - 1);
+      } else if (sessionToDeleteIndex < currentSessionIndex) {
+        currentSessionIndex--;
+      }
+
+      initTimer();
+      saveToLocalStorage();
+    }
+
+    function showToast(message) {
+      toastMessage.textContent = message;
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3000);
+    }
+
+    // --- Event Listeners ---
+    btnPlayPause.addEventListener('click', () => {
+      if (isRunning) {
+        pauseTimer();
+      } else {
+        startTimer();
+      }
+    });
+
+    btnSkip.addEventListener('click', () => {
+      if (sessions.length === 0) return;
+      onSessionFinished();
+    });
+
+    btnReset.addEventListener('click', () => {
+      if (sessions.length === 0) return;
+      const runningState = isRunning;
+      pauseTimer();
+      initTimer(); // Reloads current session duration
+      if (runningState) {
+        startTimer();
+      }
+    });
+
+    btnResetAll.addEventListener('click', () => {
+      pauseTimer();
+      currentSessionIndex = 0;
+      initTimer();
+    });
+
+    function startEditSession(id, event) {
+      event.stopPropagation();
+      const session = sessions.find(s => s.id === id);
+      if (!session) return;
+
+      editingSessionId = id;
+      
+      // Populate form fields
+      document.getElementById('session-name').value = session.name;
+      document.getElementById('session-minutes').value = Math.floor(session.duration / 60);
+      document.getElementById('session-seconds').value = session.duration % 60;
+      document.getElementById('session-type').value = session.type;
+
+      // Update Form UI to Edit Mode
+      document.getElementById('form-title').textContent = "Edit Sesi";
+      document.getElementById('btn-submit-session').innerHTML = `
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Simpan Perubahan
+      `;
+      document.getElementById('btn-cancel-edit').style.display = 'block';
+      
+      // Scroll form into view if on mobile
+      document.getElementById('add-session-form').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function cancelEditSession() {
+      editingSessionId = null;
+      
+      // Reset Form fields
+      document.getElementById('session-name').value = '';
+      document.getElementById('session-minutes').value = 25;
+      document.getElementById('session-seconds').value = 0;
+      document.getElementById('session-type').value = 'work';
+
+      // Reset Form UI
+      document.getElementById('form-title').textContent = "Tambah Sesi Baru";
+      document.getElementById('btn-submit-session').innerHTML = `
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+        Tambahkan Sesi
+      `;
+      document.getElementById('btn-cancel-edit').style.display = 'none';
+    }
+
+    // Cancel edit button listener
+    document.getElementById('btn-cancel-edit').addEventListener('click', cancelEditSession);
+
+    addSessionForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      
+      const name = document.getElementById('session-name').value.trim();
+      const mins = parseInt(document.getElementById('session-minutes').value) || 0;
+      const secs = parseInt(document.getElementById('session-seconds').value) || 0;
+      const type = document.getElementById('session-type').value;
+
+      const duration = (mins * 60) + secs;
+
+      if (duration <= 0) {
+        showToast("Durasi harus lebih dari 0 detik!");
+        return;
+      }
+
+      if (editingSessionId) {
+        // Edit Mode: Update existing session
+        const sessionIndex = sessions.findIndex(s => s.id === editingSessionId);
+        if (sessionIndex !== -1) {
+          sessions[sessionIndex].name = name;
+          sessions[sessionIndex].duration = duration;
+          sessions[sessionIndex].type = type;
+          
+          showToast(`Sesi "${name}" berhasil diupdate!`);
+          
+          // If we are currently editing the active session, refresh timer
+          if (sessionIndex === currentSessionIndex) {
+            const runningState = isRunning;
+            pauseTimer();
+            initTimer();
+            if (runningState) {
+              startTimer();
+            }
+          }
+        }
+        cancelEditSession();
+      } else {
+        // Add Mode: Create new session
+        const newSession = {
+          id: Date.now().toString(),
+          name: name,
+          duration: duration,
+          type: type
+        };
+
+        sessions.push(newSession);
+        
+        // Reset form fields
+        document.getElementById('session-name').value = '';
+        document.getElementById('session-minutes').value = 25;
+        document.getElementById('session-seconds').value = 0;
+
+        // If we had no sessions, initialize the new one
+        if (sessions.length === 1) {
+          initTimer();
+        }
+      }
+
+      updateSessionsListUI();
+      saveToLocalStorage();
+    });
+
+    soundSelect.addEventListener('change', (e) => {
+      soundSettings.alarmSound = e.target.value;
+      saveToLocalStorage();
+    });
+
+    volumeRange.addEventListener('input', (e) => {
+      const vol = parseFloat(e.target.value);
+      soundSettings.volume = vol;
+      volumeText.textContent = `${Math.round(vol * 100)}%`;
+    });
+
+    volumeRange.addEventListener('change', () => {
+      saveToLocalStorage();
+    });
+
+    btnTestSound.addEventListener('click', () => {
+      AudioEngine.play(soundSettings.alarmSound, soundSettings.volume);
+    });
+
+    autoStartCheckbox.addEventListener('change', (e) => {
+      soundSettings.autoStart = e.target.checked;
+      saveToLocalStorage();
+    });
+
+    // --- Page Visibility Handler ---
+    // Mencegah timer lag/slowing ketika tab tidak aktif. Ketika user kembali ke tab,
+    // kita sinkronkan kembali remainingTime berdasarkan targetEndTime.
+    document.addEventListener('visibilitychange', () => {
+      if (isRunning && !document.hidden) {
+        const diff = Math.max(0, Math.round((targetEndTime - Date.now()) / 1000));
+        remainingTime = diff;
+        updateTimerDisplay();
+        
+        if (remainingTime <= 0) {
+          clearInterval(timerInterval);
+          onSessionFinished();
+        }
+      }
+    });
+
+    // --- Init ---
+    loadFromLocalStorage();
+    initTimer();
+  </script>
+</body>
+</html>
